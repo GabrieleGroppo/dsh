@@ -1,0 +1,10 @@
+ls -la
+ls | wc -l
+ls > FILE.OUT
+ls >> FILE.OUT
+cat FILE.OUT | wc -l
+
+setpath
+setpath /opt/bin
+exit
+echo "error"

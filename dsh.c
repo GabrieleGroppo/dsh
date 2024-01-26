@@ -10,6 +10,7 @@
 #define MAX_LINE 4096
 #define MAX_ARGS 256
 #define MAX_PATH 512
+#define MAX_PROMPT 32
 
 char _path[MAX_PATH] = "/bin/:/usr/bin/";
 
@@ -22,8 +23,8 @@ void panic(const char* msg) {
     exit(EXIT_FAILURE);
 }
 
-int prompt(char *buf, size_t buf_size) {
-    printf("dsh$ ");
+int prompt(char *buf, size_t buf_size, const char* prompt_string) {
+    printf("%s", prompt_string);
     if(fgets(buf, buf_size, stdin) == NULL) {
         return EOF;//Esco dalla shell con ctrl+d
     }
@@ -212,8 +213,13 @@ int main(void) {
     char input_buffer[MAX_LINE];
     size_t arg_count;
     char* arg_list[MAX_ARGS];
+    char prompt_string[MAX_PROMPT] = "\0";
+    if (isatty(0)) {//contrllo se stdin e' un terminale 
+        strcpy(prompt_string, "dsh$ \0");
+    }
     
-    while (prompt(input_buffer, MAX_LINE) >= 0){
+    
+    while (prompt(input_buffer, MAX_LINE, prompt_string) >= 0){
         //printf("DEBUG: I read %s\n", input_buffer);
         arg_count = 0;
         arg_list[arg_count] = strtok(input_buffer, " ");
@@ -295,6 +301,6 @@ int main(void) {
             
         }
     }
-    puts("");
     exit(EXIT_SUCCESS);
 }
+
