@@ -92,7 +92,7 @@ void exec_rel2abs(char** arg_list) {
     }
 }
 
-void do_redir(const char* out_path, char** arg_list){
+void do_redir(const char* out_path, char** arg_list, const char* mode){
     if(out_path == NULL) {
         panic("do_redir: parameter error");
     }
@@ -106,7 +106,7 @@ void do_redir(const char* out_path, char** arg_list){
         }
     }else if(pid == 0) {
         //begin child code
-        FILE* out = fopen(out_path, "w+");//w+ va cambiato per le altre operazioni di redirect
+        FILE* out = fopen(out_path, mode);//w+ va cambiato per le altre operazioni di redirect
         if(out == NULL) {
             perror(out_path);
             exit(EXIT_FAILURE);//termino il processo figlio
@@ -118,6 +118,72 @@ void do_redir(const char* out_path, char** arg_list){
         //end child code
     }else {
         panic("do_redir: fork");
+    }
+}
+
+void do_pipe(size_t pipe_pos, char** arg_list) {
+    if(pipe_pos == 0) {
+        panic("do_pipe: parameter error");
+    }
+
+    //Es. ls | wc -l
+    //Vettore con i file descriptor dei due lati della pipe 
+    //(0: lettura, 1: scrittura)
+    int pipe_fd[2];
+    int pid;
+    //left size of the pipe
+    if(pipe(pipe_fd) < 0) {
+        panic("do_pipe: pipe");
+    }
+
+    
+    pid = fork();
+
+    if(pid > 0){
+
+        int wpid = wait(NULL);
+        if (wpid < 0){
+            panic("de_pipe: wait");
+        }
+    }else if(pid == 0) {
+        //begin child code
+        //Chiudo il lato di lettura della pipe
+        close(pipe_fd[0]);
+        //Ridirigo lo STDOUT sul lato di scrittura della pipe
+        dup2(pipe_fd[1], 1);//STDOUT_FILENO == 1 == fileno(stdout)
+        close(pipe_fd[1]);
+        exec_rel2abs(arg_list);
+        perror(arg_list[0]);
+        //Se exec fallisce, termino il processo figlio
+        exit(EXIT_FAILURE);
+        //end child code
+    }else {
+        panic("do_pipe: fork");
+    }
+
+    //right size of the pipe
+    pid = fork();
+    
+    if(pid > 0){
+        close(pipe_fd[0]);
+        close(pipe_fd[1]);
+        int wpid = wait(NULL);
+        if (wpid < 0){
+            panic("de_pipe: wait");
+        }
+    }else if(pid == 0) {
+        //begin child code
+        //Chiudo il lato di scrittura della pipe
+        close(pipe_fd[1]);
+        //Ridirigo lo STDIN sul lato di lettura della pipe
+        dup2(pipe_fd[0], 0);//STDIN_FILENO == 0 == fileno(stdin)
+        close(pipe_fd[0]);
+        exec_rel2abs(arg_list + pipe_pos + 1);//+1 per saltare il simbolo |
+        perror(arg_list[pipe_pos + 1]);
+        //Se exec fallisce, termino il processo figlio
+        exit(EXIT_FAILURE);
+    }else {
+        panic("do_pipe: fork");
     }
 }
 
@@ -176,12 +242,24 @@ int main(void) {
         //END BUILT-IN COMMANDS
         {
             size_t redir_pos = 0;
+            size_t append_pos = 0;
+            size_t pipe_pos = 0;
             //check for special characters (e.g. |, <, >, >>, &, etc.)
             //TODO
             for (int i = 0; i < arg_count; i++) {
                 if(strcmp(arg_list[i], ">") == 0) {
                     //Redirect symbol found
                     redir_pos = i;
+                    break;
+                }
+                if(strcmp(arg_list[i], ">>") == 0) {
+                    //Redirect symbol append found
+                    append_pos = i;
+                    break;
+                }
+                if(strcmp(arg_list[i], "|") == 0) {
+                    //Pipe symbol found
+                    pipe_pos = i;
                     break;
                 }
                 //if(strcmp(arg_list[i], "<") == 0) { //TODO}
@@ -203,8 +281,13 @@ int main(void) {
                 arg_list[redir_pos] = NULL;
                 //effettuo la ridirezione
                 //nome del file su cui scrivere in arg_list[redir_pos + 1]
-                do_redir(arg_list[redir_pos + 1], arg_list);
-            // } else if() { //TODO}
+                do_redir(arg_list[redir_pos + 1], arg_list, "w+");
+            } else if(append_pos != 0) {
+                arg_list[append_pos] = NULL;
+                do_redir(arg_list[append_pos + 1], arg_list, "a+");
+            } else if(pipe_pos != 0) {
+                arg_list[pipe_pos] = NULL;
+                do_pipe(pipe_pos, arg_list);
             } else {
                 //exec
                 do_exec(arg_list);

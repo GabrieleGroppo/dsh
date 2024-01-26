@@ -1,0 +1,12 @@
+dest.txt
+dsh
+dsh.c
+out.txt
+README.md
+requisiti.md
+dest.txt
+dsh
+dsh.c
+out.txt
+README.md
+requisiti.md
