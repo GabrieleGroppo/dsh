@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <signal.h>
 
 #define MAX_LINE 4096
 #define MAX_ARGS 256
@@ -209,6 +210,26 @@ void do_exec(char** arg_list) {
     
 }
 
+void do_exec_bg(char** arg_list) {
+    int pid = fork();
+
+    if(pid > 0){
+        //parent code
+        //do nothing
+    }else if(pid == 0) {
+        //begin child code
+        exec_rel2abs(arg_list);
+        //uccido il processo figlio in ogni caso appena finisce la task
+        //kill(getpid(), SIGKILL);
+        perror(arg_list[0]);
+        //Se exec fallisce, termino il processo figlio
+        exit(EXIT_FAILURE);
+        //end child code
+    }else {
+        panic("do_exec_bg: fork");
+    }
+}
+
 int main(void) {
     char input_buffer[MAX_LINE];
     size_t arg_count;
@@ -220,6 +241,13 @@ int main(void) {
     
     
     while (prompt(input_buffer, MAX_LINE, prompt_string) >= 0){
+        fflush(stdout);
+        fflush(stdin);
+        if (isatty(0)) {//contrllo se stdin e' un terminale 
+            strcpy(prompt_string, "dsh$ \0");
+        }else{
+            strcpy(prompt_string, "\0");
+        }
         //printf("DEBUG: I read %s\n", input_buffer);
         arg_count = 0;
         arg_list[arg_count] = strtok(input_buffer, " ");
@@ -250,6 +278,8 @@ int main(void) {
             size_t redir_pos = 0;
             size_t append_pos = 0;
             size_t pipe_pos = 0;
+            size_t bg_pos = 0;
+
             //check for special characters (e.g. |, <, >, >>, &, etc.)
             //TODO
             for (int i = 0; i < arg_count; i++) {
@@ -266,6 +296,10 @@ int main(void) {
                 if(strcmp(arg_list[i], "|") == 0) {
                     //Pipe symbol found
                     pipe_pos = i;
+                    break;
+                }if(strcmp(arg_list[i], "&") == 0) {
+                    //Background symbol found
+                    bg_pos = i;
                     break;
                 }
                 //if(strcmp(arg_list[i], "<") == 0) { //TODO}
@@ -294,6 +328,10 @@ int main(void) {
             } else if(pipe_pos != 0) {
                 arg_list[pipe_pos] = NULL;
                 do_pipe(pipe_pos, arg_list);
+            } else if(bg_pos != 0) {
+                arg_list[bg_pos] = NULL;
+                do_exec_bg(arg_list);
+                puts("\n");
             } else {
                 //exec
                 do_exec(arg_list);
@@ -303,4 +341,3 @@ int main(void) {
     }
     exit(EXIT_SUCCESS);
 }
-
