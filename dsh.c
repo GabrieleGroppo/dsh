@@ -14,6 +14,13 @@
 
 char _path[MAX_PATH] = "/bin/:/usr/bin/";
 
+struct var {
+  char * name;
+  char * value;
+};
+
+struct var * vars[MAX_ARGS];
+
 void panic(const char* msg) {
     if(errno) {
         fprintf(stderr, "PANIC: %s %s\n\n", msg, strerror(errno));
@@ -26,7 +33,7 @@ void panic(const char* msg) {
 int prompt(char *buf, size_t buf_size, const char* prompt_string) {
     printf("%s", prompt_string);
     if(fgets(buf, buf_size, stdin) == NULL) {
-        return EOF;//Esco dalla shell con ctrl+d
+        return EOF;
     }
 
     size_t cur = -1;
@@ -44,7 +51,6 @@ int prompt(char *buf, size_t buf_size, const char* prompt_string) {
 
 void setpath (const char* new_path) {
     if (new_path != NULL){
-        //SOSTITUISCO IL PATH
         #if USE_DEBUG_PRINTF
             printf("DEBUG: new_path = %s\n", new_path);
         #endif
@@ -61,7 +67,7 @@ void setpath (const char* new_path) {
     printf("%s\n", _path);
 }
 
-//rel_path: path relativo o nome del comando. Esempio: ls, /bin/ls, ./ls
+
 void path_lookup(char* abs_path, const char* rel_path) {
     char* prefix = strtok(_path, ":");
     char buf[MAX_PATH];
@@ -107,15 +113,15 @@ void do_redir(const char* out_path, char** arg_list, const char* mode){
         }
     }else if(pid == 0) {
         //begin child code
-        FILE* out = fopen(out_path, mode);//w+ va cambiato per le altre operazioni di redirect
+        FILE* out = fopen(out_path, mode);
         if(out == NULL) {
             perror(out_path);
-            exit(EXIT_FAILURE);//termino il processo figlio
+            exit(EXIT_FAILURE);
         }
-        dup2(fileno(out), fileno(stdout));//STDOUT_FILENO == 1 == fileno(stdout)
+        dup2(fileno(out), fileno(stdout));
         exec_rel2abs(arg_list);
         perror(arg_list[0]);
-        exit(EXIT_FAILURE);//termino il processo figlio
+        exit(EXIT_FAILURE);
         //end child code
     }else {
         panic("do_redir: fork");
@@ -127,12 +133,9 @@ void do_pipe(size_t pipe_pos, char** arg_list) {
         panic("do_pipe: parameter error");
     }
 
-    //Es. ls | wc -l
-    //Vettore con i file descriptor dei due lati della pipe 
-    //(0: lettura, 1: scrittura)
     int pipe_fd[2];
     int pid;
-    //left size of the pipe
+
     if(pipe(pipe_fd) < 0) {
         panic("do_pipe: pipe");
     }
@@ -147,22 +150,19 @@ void do_pipe(size_t pipe_pos, char** arg_list) {
             panic("de_pipe: wait");
         }
     }else if(pid == 0) {
-        //begin child code
-        //Chiudo il lato di lettura della pipe
         close(pipe_fd[0]);
-        //Ridirigo lo STDOUT sul lato di scrittura della pipe
-        dup2(pipe_fd[1], 1);//STDOUT_FILENO == 1 == fileno(stdout)
+        /
+        dup2(pipe_fd[1], 1);
         close(pipe_fd[1]);
         exec_rel2abs(arg_list);
         perror(arg_list[0]);
-        //Se exec fallisce, termino il processo figlio
+        
         exit(EXIT_FAILURE);
-        //end child code
+        
     }else {
         panic("do_pipe: fork");
     }
 
-    //right size of the pipe
     pid = fork();
     
     if(pid > 0){
@@ -173,15 +173,12 @@ void do_pipe(size_t pipe_pos, char** arg_list) {
             panic("de_pipe: wait");
         }
     }else if(pid == 0) {
-        //begin child code
-        //Chiudo il lato di scrittura della pipe
+        
         close(pipe_fd[1]);
-        //Ridirigo lo STDIN sul lato di lettura della pipe
-        dup2(pipe_fd[0], 0);//STDIN_FILENO == 0 == fileno(stdin)
+        dup2(pipe_fd[0], 0);
         close(pipe_fd[0]);
-        exec_rel2abs(arg_list + pipe_pos + 1);//+1 per saltare il simbolo |
+        exec_rel2abs(arg_list + pipe_pos + 1);
         perror(arg_list[pipe_pos + 1]);
-        //Se exec fallisce, termino il processo figlio
         exit(EXIT_FAILURE);
     }else {
         panic("do_pipe: fork");
@@ -197,16 +194,53 @@ void do_exec(char** arg_list) {
             panic("de_exec: wait");
         }
     }else if(pid == 0) {
-        //begin child code
         exec_rel2abs(arg_list);
         perror(arg_list[0]);
-        //Se exec fallisce, termino il processo figlio
         exit(EXIT_FAILURE);
-        //end child code
     }else {
         panic("do_exec: fork");
     }
     
+}
+
+void handleSet(char ** args, int arg_count) {
+  if (arg_count != 3)
+    fprintf(stderr, "Error: set\n");
+
+  if (strcmp(args[1], "PATH") == 0) {
+    setpath(args[2]);
+    return;
+  }
+
+  struct var * new_var = malloc(sizeof(struct var));
+  if (new_var == NULL) {
+    panic("handleSet");
+  }
+
+  new_var -> name = malloc(strlen(args[1]) + 1);
+  if (new_var -> name == NULL) {
+    panic("handleSet");
+  }
+
+  new_var -> value = malloc(strlen(args[2]) + 1);
+  if (new_var -> value == NULL) {
+    panic("handleSet");
+  }
+
+  strcpy(new_var -> name, args[1]);
+  strcpy(new_var -> value, args[2]);
+  vars[arg_count - 3] = new_var;
+}
+
+char* getValue(char* name) {
+    int i = 0;
+    while (vars[i] != NULL) {
+        if (strcmp(vars[i] -> name, name) == 0) {
+            return vars[i] -> value;
+        }
+        i++;
+    }
+    return NULL;
 }
 
 int main(void) {
@@ -214,18 +248,18 @@ int main(void) {
     size_t arg_count;
     char* arg_list[MAX_ARGS];
     char prompt_string[MAX_PROMPT] = "\0";
-    if (isatty(0)) {//contrllo se stdin e' un terminale 
+    if (isatty(0)) {
         strcpy(prompt_string, "dsh$ \0");
     }
     
     
     while (prompt(input_buffer, MAX_LINE, prompt_string) >= 0){
-        //printf("DEBUG: I read %s\n", input_buffer);
+        
         arg_count = 0;
         arg_list[arg_count] = strtok(input_buffer, " ");
         
         if (arg_list[arg_count] == NULL){
-            // se non specifico nulla, continuo (riga vuota)
+            
             continue;
         }else {
             do {
@@ -233,7 +267,7 @@ int main(void) {
                 if (arg_count >= MAX_ARGS) {
                     break;
                 }
-                arg_list[arg_count] = strtok(NULL, " ");//NULL perche' strtok mantiene lo stato del buffer precedente
+                arg_list[arg_count] = strtok(NULL, " ");
             } while (arg_list[arg_count] != NULL);
         }
 
@@ -243,15 +277,15 @@ int main(void) {
         }
         if (strcmp(arg_list[0], "setpath") == 0) {
             setpath(arg_list[1]);
-            continue;//back to prompt
+            continue;
         }
         //END BUILT-IN COMMANDS
         {
             size_t redir_pos = 0;
             size_t append_pos = 0;
             size_t pipe_pos = 0;
-            //check for special characters (e.g. |, <, >, >>, &, etc.)
-            //TODO
+            size_t value_pos = 0;
+
             for (int i = 0; i < arg_count; i++) {
                 if(strcmp(arg_list[i], ">") == 0) {
                     //Redirect symbol found
@@ -268,25 +302,16 @@ int main(void) {
                     pipe_pos = i;
                     break;
                 }
-                //if(strcmp(arg_list[i], "<") == 0) { //TODO}
-                //if(strcmp(arg_list[i], "|") == 0) { //TODO}
-                //if(strcmp(arg_list[i], "&") == 0) { //TODO}
+                if (strstr(args[i], "$") != NULL) {
+                    value_pos = i;
+                    break;
+                }
             }
 
-#if USE_DEBUG_PRINTF //-DUSE_DEBUG_PRINTF//Guardia per il preprocessore
-            printf("DEBUG: tokens");
-            for (size_t i = 0; i < arg_count; i++) {
-                printf(" %s", arg_list[i]);
-            }
-            puts("");
-#endif
-            //do shell operations
-            //Per semplicita' considero un solo argomento dopo il redirect
             if(redir_pos != 0) {
-                //Remove the redirection from the argument list
+                
                 arg_list[redir_pos] = NULL;
-                //effettuo la ridirezione
-                //nome del file su cui scrivere in arg_list[redir_pos + 1]
+                
                 do_redir(arg_list[redir_pos + 1], arg_list, "w+");
             } else if(append_pos != 0) {
                 arg_list[append_pos] = NULL;
@@ -294,8 +319,9 @@ int main(void) {
             } else if(pipe_pos != 0) {
                 arg_list[pipe_pos] = NULL;
                 do_pipe(pipe_pos, arg_list);
+            } else if(value_pos != 0){
+                printf("%s\n", getValue(args[value_pos] + 1));
             } else {
-                //exec
                 do_exec(arg_list);
             }
             
