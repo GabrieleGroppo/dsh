@@ -1,9 +1,0 @@
-total 48
-drwxrwxr-x 3 gabriele gabriele  4096 Jan 26 11:59 .
-drwxr-xr-x 5 gabriele gabriele  4096 Jan 26 02:25 ..
--rwxrwxr-x 1 gabriele gabriele 17800 Jan 26 11:59 dsh
--rw-rw-r-- 1 gabriele gabriele  5681 Jan 26 11:59 dsh.c
-drwxrwxr-x 7 gabriele gabriele  4096 Jan 26 02:28 .git
--rw-rw-r-- 1 gabriele gabriele     0 Jan 26 12:01 out.txt
--rw-r--r-- 1 gabriele gabriele     6 Jan 26 02:25 README.md
--rw-rw-r-- 1 gabriele gabriele   960 Jan 26 00:20 requisiti.md
