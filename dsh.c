@@ -1,4 +1,12 @@
-/*dsh.c*/
+/*
+
+DIDATTIC SHELL: dsh.c
+
+Autore: Gabriele Groppo
+Mat: 902238
+Punto sviluppato: 3
+
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,6 +21,14 @@
 #define MAX_PROMPT 32
 
 char _path[MAX_PATH] = "/bin/:/usr/bin/";
+char prompt_string[MAX_PROMPT] = "\0";
+struct var {
+    char* name;
+    char* value;
+};
+
+struct var* vars[MAX_ARGS];
+int var_count = 0;
 
 void panic(const char* msg) {
     if(errno) {
@@ -21,6 +37,12 @@ void panic(const char* msg) {
         fprintf(stderr, "PANIC: %s\n\n", msg);
     }
     exit(EXIT_FAILURE);
+}
+
+void set_propt_string(const char* new_prompt_string) {
+    if(new_prompt_string != NULL) {
+        strcpy(prompt_string, new_prompt_string);
+    }
 }
 
 int prompt(char *buf, size_t buf_size, const char* prompt_string) {
@@ -93,7 +115,7 @@ void exec_rel2abs(char** arg_list) {
     }
 }
 
-void do_redir(const char* out_path, char** arg_list, const char* mode){
+void do_redir(const char* out_path, char** arg_list, const char* mode) {
     if(out_path == NULL) {
         panic("do_redir: parameter error");
     }
@@ -140,7 +162,7 @@ void do_pipe(size_t pipe_pos, char** arg_list) {
     
     pid = fork();
 
-    if(pid > 0){
+    if(pid > 0) {
 
         int wpid = wait(NULL);
         if (wpid < 0){
@@ -209,15 +231,96 @@ void do_exec(char** arg_list) {
     
 }
 
+void getValue(const char* name) {
+    
+    if (name == NULL) {
+        printf("Name can't be NULL\n");
+        return;
+    }
+    if (strcmp(name, "PATH") == 0) {
+        printf("%s\n", _path);
+        return;
+    }
+    if (var_count == 0) {
+        printf("Variable %s does not exist.\n", name);
+        return;
+    }
+    for (int i = 0; i < var_count; i++) {
+        if (strcmp(vars[i]->name, name) == 0) {
+            printf("%s\n", vars[i]->value);
+            break;
+        }
+    }
+}
+//GESTIONE (AGGIUNTA e MODIFICA) VARIABILI
+void setvars(char** args, int arg_count) {
+    if (arg_count != 3)
+		printf("Invalid number of arguments\n");
+    //Controllo se sto modificando il path
+    //Il path ha bisogno di passare controlli più severi per essere aggiornato
+    if (strcmp(args[1], "PATH") == 0) {
+        setpath(args[2]);
+        return;
+    }
+    //Altrimenti aggiungo una variabile
+    struct var* new_var = malloc(sizeof(struct var));
+    if (new_var == NULL) {
+        panic("setvars: Malloc");
+    }
+    
+    new_var->name = malloc(strlen(args[1]) + 1);
+
+    if (new_var->name == NULL) {
+        panic("setvars: Malloc");
+    }
+
+    new_var->value = malloc(strlen(args[2]) + 1);
+    if (new_var->value == NULL) {
+        panic("setvars: Malloc");
+    }
+
+    strcpy(new_var->name, args[1]);
+    strcpy(new_var->value, args[2]);
+    //Verifico se la variabile esiste gia'
+    for(int i = 0; i < var_count; i++) {
+        if (strcmp(vars[i]->name, new_var->name) == 0) {
+            vars[i] -> value = new_var -> value;
+            return;
+        }
+    }
+    //Se non esiste, la aggiungo
+    vars[var_count++] = new_var;
+    
+}
+
+void welcome_message(){
+    //Stampa DSH in grosso
+    printf("Welcome! \n\n");
+        char matrice[5][40] = {
+        " #####    ######  #    # ",
+        " #    #  #       #    # ",
+        " #    #   ####   ###### ",
+        " #    #       #  #    # ",
+        " #####   #####  #    # "
+    };
+
+    for (int i = 0; i < 5; i++) {
+        printf("%s\n", matrice[i]);
+    }
+
+    printf("\nGabriele Groppo's DIDATTIC SHELL\n");
+    printf("Type help for the list of commands.\n\n");
+}
+
 int main(void) {
+    welcome_message();
     char input_buffer[MAX_LINE];
     size_t arg_count;
     char* arg_list[MAX_ARGS];
-    char prompt_string[MAX_PROMPT] = "\0";
+    
     if (isatty(0)) {//contrllo se stdin e' un terminale 
         strcpy(prompt_string, "dsh$ \0");
     }
-    
     
     while (prompt(input_buffer, MAX_LINE, prompt_string) >= 0){
         //printf("DEBUG: I read %s\n", input_buffer);
@@ -241,15 +344,38 @@ int main(void) {
         if (strcmp(arg_list[0], "exit") == 0) {
             exit(EXIT_SUCCESS);
         }
-        if (strcmp(arg_list[0], "setpath") == 0) {
-            setpath(arg_list[1]);
-            continue;//back to prompt
+        //set command
+        if (strcmp(arg_list[0], "set") == 0) {
+            setvars(arg_list, arg_count);
+            continue;
         }
+        //setprompt command
+        if (strcmp(arg_list[0], "setprompt") == 0) {
+            set_propt_string(arg_list[1]);
+            continue;
+        }
+        //info command
+        if (strcmp(arg_list[0], "info") == 0) {
+            welcome_message();
+            continue;
+        }
+        //help command
+        if(strcmp(arg_list[0], "help") == 0) {
+            printf("Built-in commands:\n");
+            printf("exit: exit the shell\n");
+            printf("set: set a variable\n");
+            printf("setprompt: set the prompt string\n");
+            printf("info: print info about the shell\n");
+            printf("help: print this help message\n");
+            continue;
+        }
+
         //END BUILT-IN COMMANDS
         {
             size_t redir_pos = 0;
             size_t append_pos = 0;
             size_t pipe_pos = 0;
+            size_t value_pos = 0;
             //check for special characters (e.g. |, <, >, >>, &, etc.)
             //TODO
             for (int i = 0; i < arg_count; i++) {
@@ -268,9 +394,11 @@ int main(void) {
                     pipe_pos = i;
                     break;
                 }
-                //if(strcmp(arg_list[i], "<") == 0) { //TODO}
-                //if(strcmp(arg_list[i], "|") == 0) { //TODO}
-                //if(strcmp(arg_list[i], "&") == 0) { //TODO}
+                if (strstr(arg_list[i], "$") != NULL) {
+                    value_pos = i;
+                    break;
+                }
+
             }
 
 #if USE_DEBUG_PRINTF //-DUSE_DEBUG_PRINTF//Guardia per il preprocessore
@@ -294,7 +422,10 @@ int main(void) {
             } else if(pipe_pos != 0) {
                 arg_list[pipe_pos] = NULL;
                 do_pipe(pipe_pos, arg_list);
-            } else {
+            } else if(value_pos != 0) {
+                getValue(arg_list[value_pos] + 1);
+            }
+            else {
                 //exec
                 do_exec(arg_list);
             }
