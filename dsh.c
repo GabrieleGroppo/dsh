@@ -16,6 +16,7 @@ Punto sviluppato: 4
 #include <sys/wait.h>
 #include <termios.h>
 #include <signal.h>
+#include <stdbool.h>
 
 #define MAX_LINE 4096
 #define MAX_ARGS 256
@@ -416,29 +417,27 @@ void do_exec(char** arg_list) {
     
 }
 
-void getValue(const char* name) {
+char* getValue(const char* name) {
     
     if (name == NULL) {
         printf("Name can't be NULL\n");
-        return;
+        return NULL;
     }
     if (strcmp(name, "PATH") == 0) {
-        printf("%s\n", _path);
-        return;
+        return _path;
     }
     if (var_count == 0) {
-        printf("No variables other than the PATH have yet been set.\n");
-        return;
+        return NULL;
     }
     
     for (int i = 0; i < var_count; i++) {
         if (strcmp(vars[i]->name, name) == 0) {
-            printf("%s\n", vars[i]->value);
-            return;
+            return vars[i]->value;
         }
     }
     printf("Variable %s does not exist.\n", name);
 }
+
 //GESTIONE (AGGIUNTA e MODIFICA) VARIABILI
 void setvars(char** args, int arg_count) {
     if (arg_count != 3){
@@ -533,7 +532,6 @@ int main(void) {
             } while (arg_list[arg_count] != NULL);
         }
 
-        
         //BUILT-IN COMMANDS
         if (strcmp(arg_list[0], "exit") == 0) {
             exit(EXIT_SUCCESS);
@@ -576,6 +574,8 @@ int main(void) {
             size_t append_pos = 0;
             size_t pipe_pos = 0;
             size_t value_pos = 0;
+            bool is_var = false;
+
             //check for special characters (e.g. |, <, >, >>, &, etc.)
             //TODO
             for (int i = 0; i < arg_count; i++) {
@@ -596,6 +596,7 @@ int main(void) {
                 }
                 if (strstr(arg_list[i], "$") != NULL) {
                     value_pos = i;
+                    is_var = true;
                     break;
                 }
 
@@ -622,8 +623,19 @@ int main(void) {
             } else if(pipe_pos != 0) {
                 arg_list[pipe_pos] = NULL;
                 do_pipe(pipe_pos, arg_list);
-            } else if(value_pos != 0) {
-                getValue(arg_list[value_pos] + 1);
+            } else if(is_var == true) {
+                
+                char* value = getValue(arg_list[value_pos] + 1);
+                if (value != NULL) {
+                    if(value_pos == 0)
+                        printf("%s\n", value);
+                    else{
+                        arg_list[value_pos] = value;
+                        do_exec(arg_list);
+                    }
+                }else {
+                    printf("Variable %s does not exist.\n", arg_list[value_pos] + 1);
+                }
             }
             else {
                 //exec
