@@ -15,7 +15,6 @@ Punto sviluppato: 4
 #include <unistd.h>
 #include <sys/wait.h>
 #include <termios.h>
-#include <signal.h>
 #include <stdbool.h>
 
 #define MAX_LINE 4096
@@ -85,12 +84,6 @@ void clearUntilDollar() {
 
     // Stampa spazi per cancellare fino al carattere '$'
     printf("\033[K");
-}
-
-void handle_signal_child(int sig) {
-    if(sig == SIGTERM) {
-        kill(getpid(), SIGKILL);
-    }
 }
 
 int prompt_alternativa(char *buf, size_t buf_size, const char* prompt_string) {
