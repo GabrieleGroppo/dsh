@@ -10,7 +10,7 @@ Utilizzo una variabile `var_count` per tenere traccia del numero di variabili di
 
 
 
-###Funzioni utilizzate:
+### Funzioni utilizzate:
 #### GETVALUE
 La funzione `getValue(const char* name)` viene utilizzata per stampare il valore della variabile di ambiente passata per parametro. 
 - Se la variabile non esiste, viene stampato un messaggio di errore.
